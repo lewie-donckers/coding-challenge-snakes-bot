@@ -25,21 +25,34 @@ def collides(pos: np.array, snakes: List[Snake]) -> bool:
     return False
 
 
-class ExampleBot(Bot):
+def distance(a: np.array, b: np.array) -> int:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+class LewieBot(Bot):
     """
     Moves randomly, but makes sure it doesn't collide with other snakes
     """
 
     @property
     def name(self):
-        return 'Greedy Gerard'
+        return 'Serpent of the Light'
 
     @property
     def contributor(self):
-        return 'Nobleo'
+        return 'Lewie'
 
-    def determine_next_move(self, snake: Snake, other_snakes: List[Snake], candies: List[np.array]) -> Move:
+    def determine_next_move(self, snake: Snake, other_snakes: List[Snake],
+                            candies: List[np.array]) -> Move:
         moves = self._determine_possible_moves(snake, other_snakes[0])
+
+        for move in moves:
+            before = distance(snake[0], candies[0])
+            after = distance(snake[0] + MOVE_VALUE_TO_DIRECTION[move],
+                             candies[0])
+            if before > after:
+                return move
+
         return self.choose_move(moves)
 
     def _determine_possible_moves(self, snake, other_snake) -> List[Move]:
@@ -48,15 +61,22 @@ class ExampleBot(Bot):
         will be used during unit-testing
         """
         # highest priority, a move that is on the grid
-        on_grid = [move for move in MOVE_VALUE_TO_DIRECTION
-                   if is_on_grid(snake[0] + MOVE_VALUE_TO_DIRECTION[move], self.grid_size)]
+        on_grid = [
+            move for move in MOVE_VALUE_TO_DIRECTION
+            if is_on_grid(snake[0] +
+                          MOVE_VALUE_TO_DIRECTION[move], self.grid_size)
+        ]
         if not on_grid:
             return list(Move)
 
         # then avoid collisions with other snakes
-        collision_free = [move for move in on_grid
-                          if is_on_grid(snake[0] + MOVE_VALUE_TO_DIRECTION[move], self.grid_size)
-                          and not collides(snake[0] + MOVE_VALUE_TO_DIRECTION[move], [snake, other_snake])]
+        collision_free = [
+            move for move in on_grid
+            if is_on_grid(snake[0] +
+                          MOVE_VALUE_TO_DIRECTION[move], self.grid_size) and
+            not collides(snake[0] +
+                         MOVE_VALUE_TO_DIRECTION[move], [snake, other_snake])
+        ]
         if collision_free:
             return collision_free
         else:
