@@ -44,12 +44,30 @@ class LewieBot(Bot):
 
     def determine_next_move(self, snake: Snake, other_snakes: List[Snake],
                             candies: List[np.array]) -> Move:
+        # suicide if that would win the game
+        if len(snake) > (len(other_snakes[0]) * 2):
+            return [
+                move for move in MOVE_VALUE_TO_DIRECTION
+                if ((snake[0] +
+                     MOVE_VALUE_TO_DIRECTION[move]) == snake[1]).all()
+            ][0]
+
         moves = self._determine_possible_moves(snake, other_snakes[0])
 
+        # find closest candy
+        candy = next(
+            iter(
+                sorted({
+                    index: distance(snake[0], candies[index])
+                    for index in range(len(candies))
+                }.items(),
+                       key=lambda x: x[1])))[0]
+
+        # try to find move in direction of candy
         for move in moves:
-            before = distance(snake[0], candies[0])
+            before = distance(snake[0], candies[candy])
             after = distance(snake[0] + MOVE_VALUE_TO_DIRECTION[move],
-                             candies[0])
+                             candies[candy])
             if before > after:
                 return move
 
@@ -71,12 +89,25 @@ class LewieBot(Bot):
 
         # then avoid collisions with other snakes
         collision_free = [
-            move for move in on_grid
-            if is_on_grid(snake[0] +
-                          MOVE_VALUE_TO_DIRECTION[move], self.grid_size) and
-            not collides(snake[0] +
-                         MOVE_VALUE_TO_DIRECTION[move], [snake, other_snake])
+            move for move in on_grid if not collides(
+                snake[0] + MOVE_VALUE_TO_DIRECTION[move], [snake, other_snake])
         ]
+
+        # then avoid a dead end
+        no_dead_ends = [
+            move for move in collision_free if any([
+                is_on_grid(
+                    snake[0] + MOVE_VALUE_TO_DIRECTION[move] +
+                    MOVE_VALUE_TO_DIRECTION[move2], self.grid_size)
+                and not collides(
+                    snake[0] + MOVE_VALUE_TO_DIRECTION[move] +
+                    MOVE_VALUE_TO_DIRECTION[move2], [snake, other_snake])
+                for move2 in MOVE_VALUE_TO_DIRECTION
+            ])
+        ]
+
+        if no_dead_ends:
+            return no_dead_ends
         if collision_free:
             return collision_free
         else:
