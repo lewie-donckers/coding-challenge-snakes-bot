@@ -42,6 +42,44 @@ class LewieBot(Bot):
     def contributor(self):
         return 'Lewie'
 
+    def _do_stuff2(self, snake, other_snake, candy, pos, history, results):
+        options = {}
+        for move in MOVE_VALUE_TO_DIRECTION:
+            new_pos = pos + MOVE_VALUE_TO_DIRECTION[move]
+            first_move = (history + [move])[0]
+            score = len(history) + 1
+
+            if not is_on_grid(new_pos, self.grid_size):
+                continue
+            if collides(new_pos, [snake, other_snake]):
+                continue
+            if (new_pos == candy).all():
+                if score < results[first_move][0]:
+                    results[first_move] = [score, 1]
+                elif score == results[first_move][0]:
+                    results[first_move][1] += 1
+                continue
+            if (score + distance(new_pos, candy)) >= results[first_move][0]:
+                continue
+
+            options[move] = distance(new_pos, candy)
+
+        for move, _ in sorted(options.items(), key=lambda x: x[1]):
+            self._do_stuff2(snake, other_snake, candy,
+                            pos + MOVE_VALUE_TO_DIRECTION[move],
+                            history + [move], results)
+
+    def _do_stuff(self, snake, other_snake, candies):
+        results = {
+            m: [self.grid_size[0] * self.grid_size[1], 0]
+            for m in MOVE_VALUE_TO_DIRECTION
+        }
+
+        for candy in candies:
+            self._do_stuff2(snake, other_snake, candy, snake[0], [], results)
+
+        return results
+
     def determine_next_move(self, snake: Snake, other_snakes: List[Snake],
                             candies: List[np.array]) -> Move:
         # suicide if that would win the game
@@ -52,26 +90,11 @@ class LewieBot(Bot):
                      MOVE_VALUE_TO_DIRECTION[move]) == snake[1]).all()
             ][0]
 
-        moves = self._determine_possible_moves(snake, other_snakes[0])
+        result = self._do_stuff(snake, other_snakes[0], candies)
+        print(result)
 
-        # find closest candy
-        candy = next(
-            iter(
-                sorted({
-                    index: distance(snake[0], candies[index])
-                    for index in range(len(candies))
-                }.items(),
-                       key=lambda x: x[1])))[0]
-
-        # try to find move in direction of candy
-        for move in moves:
-            before = distance(snake[0], candies[candy])
-            after = distance(snake[0] + MOVE_VALUE_TO_DIRECTION[move],
-                             candies[candy])
-            if before > after:
-                return move
-
-        return self.choose_move(moves)
+        return sorted(result.items(),
+                      key=lambda x: x[1][0] * 10 - x[1][1])[0][0]
 
     def _determine_possible_moves(self, snake, other_snake) -> List[Move]:
         """
