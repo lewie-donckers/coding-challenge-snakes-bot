@@ -1,5 +1,6 @@
 from random import choice
 from typing import List, Tuple
+import copy
 
 import numpy as np
 
@@ -42,7 +43,12 @@ class LewieBot(Bot):
     def contributor(self):
         return 'Lewie'
 
-    def _do_stuff2(self, snake, other_snake, candy, pos, history, results):
+    # TODO sometimes we go waaay to deep
+    # - can limit max depth
+    # - currently we do depth first. based on most promising path so far. probably better to do depth first.
+    def _do_stuff2(self, snake, other_snake, candies, pos, history, path,
+                   results):
+        print(f"{len(history)} : {history}")
         options = {}
         for move in MOVE_VALUE_TO_DIRECTION:
             new_pos = pos + MOVE_VALUE_TO_DIRECTION[move]
@@ -50,33 +56,52 @@ class LewieBot(Bot):
             score = len(history) + 1
 
             if not is_on_grid(new_pos, self.grid_size):
-                continue
-            if collides(new_pos, [snake, other_snake]):
-                continue
-            if (new_pos == candy).all():
-                if score < results[first_move][0]:
-                    results[first_move] = [score, 1]
-                elif score == results[first_move][0]:
-                    results[first_move][1] += 1
-                continue
-            if (score + distance(new_pos, candy)) >= results[first_move][0]:
+                print("ignore based on grid")
                 continue
 
-            options[move] = distance(new_pos, candy)
+            if collides(new_pos, [snake, other_snake]):
+                print("ignore based on collision")
+                continue
+
+            if any([(new_pos == p).all() for p in path]):
+                print("ignore based on history")
+                continue
+
+            on_candy = False
+            for candy in candies:
+                if (new_pos == candy).all():
+                    on_candy = True
+                    if score < results[first_move][0]:
+                        results[first_move] = [score, 1]
+                    elif score == results[first_move][0]:
+                        results[first_move][1] += 1
+                    break
+            if on_candy:
+                continue
+
+            min_score_to_closest_candy = sorted(
+                [score + distance(new_pos, candy) for candy in candies])[0]
+
+            if min_score_to_closest_candy >= results[first_move][0]:
+                continue
+
+            options[move] = min_score_to_closest_candy
 
         for move, _ in sorted(options.items(), key=lambda x: x[1]):
-            self._do_stuff2(snake, other_snake, candy,
-                            pos + MOVE_VALUE_TO_DIRECTION[move],
-                            history + [move], results)
+            new_snake = copy.deepcopy(snake)
+            new_snake.move(MOVE_VALUE_TO_DIRECTION[move])
+            new_pos = pos + MOVE_VALUE_TO_DIRECTION[move]
+            self._do_stuff2(new_snake, other_snake, candies, new_pos,
+                            history + [move], path + [new_pos], results)
 
     def _do_stuff(self, snake, other_snake, candies):
+        print("------------------------")
         results = {
             m: [self.grid_size[0] * self.grid_size[1], 0]
             for m in MOVE_VALUE_TO_DIRECTION
         }
 
-        for candy in candies:
-            self._do_stuff2(snake, other_snake, candy, snake[0], [], results)
+        self._do_stuff2(snake, other_snake, candies, snake[0], [], [], results)
 
         return results
 
@@ -91,7 +116,6 @@ class LewieBot(Bot):
             ][0]
 
         result = self._do_stuff(snake, other_snakes[0], candies)
-        print(result)
 
         return sorted(result.items(),
                       key=lambda x: x[1][0] * 10 - x[1][1])[0][0]
