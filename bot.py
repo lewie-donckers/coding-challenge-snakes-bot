@@ -29,11 +29,11 @@ def get_minimum_distance(source, targets):
 
 class Node:
 
-    def __init__(self, position, *, parent=None):
+    def __init__(self, position, *, parent=None, cost_so_far=0):
         self.position = position
         self.parent = parent
-        self.cost_so_far = 0
-        self.estimated_total = 0
+        self.cost_so_far = cost_so_far
+        self.estimated_total = cost_so_far
 
     def __eq__(self, other):
         return (self.position == other.position).all()
@@ -49,32 +49,44 @@ class LewieBot(Bot):
     def contributor(self):
         return 'Lewie'
 
-    def _is_valid_position(self, position, snake, other_snake):
-        return is_on_grid(position, self.grid_size) and not collides(
-            position, [snake, other_snake])
+    def _is_valid_position(self, position, snakes):
+        return is_on_grid(position,
+                          self.grid_size) and not collides(position, snakes)
 
-    def _get_valid_moves(self, position, snake, other_snake):
+    def _get_valid_moves(self, position, snakes):
         return [
             move for move in MOVE_VALUE_TO_DIRECTION
             if self._is_valid_position(
-                position + MOVE_VALUE_TO_DIRECTION[move], snake, other_snake)
+                position + MOVE_VALUE_TO_DIRECTION[move], snakes)
         ]
 
-    def _get_neighbors(self, current_node, snake, other_snake):
+    def _get_neighbors(self, current_node, snakes):
         return [
             Node(current_node.position + MOVE_VALUE_TO_DIRECTION[move],
-                 parent=current_node) for move in self._get_valid_moves(
-                     current_node.position, snake, other_snake)
+                 parent=current_node,
+                 cost_so_far=current_node.cost_so_far + 1)
+            for move in self._get_valid_moves(current_node.position, snakes)
         ]
+
+    def _get_candies_not_in_snakes(self, candies, snakes):
+        return [candy for candy in candies if not collides(candy, snakes)]
 
     def _get_move_to_candy(self, snake, other_snake, candies):
         # IDEAS to improve
-        # - remove candies that are inside snake
         # - use heuristic to determine if candy is inside snake based on
         #   position of candy in snake and number of turns taken
         # - select better structures for work and done
+        # - avoid dead ends
+        # - block other snake if possible
 
-        work = self._get_neighbors(Node(snake[0]), snake, other_snake)
+        snakes = [snake, other_snake]
+
+        candies = self._get_candies_not_in_snakes(candies, snakes)
+
+        if not candies:
+            return None
+
+        work = self._get_neighbors(Node(snake[0]), snakes)
         done = []
 
         while work:
@@ -100,23 +112,19 @@ class LewieBot(Bot):
                     if ((first_pos -
                          snake[0]) == MOVE_VALUE_TO_DIRECTION[move]).all():
                         return move
-                # TODO handle this
-                raise Exception("TODO should not happen")
 
-            for neighbor in self._get_neighbors(current_node, snake,
-                                                other_snake):
+            for neighbor in self._get_neighbors(current_node, snakes):
                 if neighbor in done:
                     continue
 
-                neighbor.cost_so_far = current_node.cost_so_far + 1
-                neighbor.estimated_total = neighbor.cost_so_far + get_minimum_distance(
+                neighbor.estimated_total += get_minimum_distance(
                     neighbor.position, candies)
 
                 try:
                     index = work.index(neighbor)
                     node = work[index]
                     if neighbor.cost_so_far < node.cost_so_far:
-                        node = neighbor  # TODO does this work?
+                        node = neighbor
                 except ValueError:
                     work.append(neighbor)
 
@@ -130,8 +138,9 @@ class LewieBot(Bot):
         ][0]
 
     def _get_backup_move(self, snake, other_snake):
-        return next(iter(self._get_valid_moves(snake[0], snake, other_snake)),
-                    Move.UP)
+        return next(
+            iter(self._get_valid_moves(snake[0], [snake, other_snake])),
+            Move.UP)
 
     def determine_next_move(self, snake: Snake, other_snakes: List[Snake],
                             candies: List[np.array]) -> Move:
